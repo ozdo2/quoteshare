@@ -305,11 +305,11 @@
                 <button onclick="toggleDarkMode()" id="themeBtn">☀️</button>
                 
                 <div id="userButtons" class="hidden">
-                    <button onclick="showPage('add-quote')">➕</button>
+                    <button onclick="goToAddQuote()" title="Ajouter une citation">➕</button>
                     <button onclick="viewProfile(currentUser.pseudo)">
                         👤 <span id="userName"></span>
                     </button>
-                    <button onclick="logout()">🚪</button>
+                    <button onclick="logout()" title="Déconnexion">🚪</button>
                 </div>
                 
                 <button id="loginBtn" class="btn-primary hidden" onclick="showPage('auth')">
@@ -376,6 +376,9 @@
                     </h2>
                     <div class="form-group">
                         <textarea id="newQuoteText" placeholder="Écrivez votre citation..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="quoteOriginalAuthor" placeholder="Auteur original (optionnel - ex: Victor Hugo, Albert Einstein...)">
                     </div>
                     <button class="btn-primary" style="width: 100%;" onclick="addQuote()">
                         Publier
@@ -460,6 +463,16 @@
                 document.getElementById('currentQuoteText').textContent = `"${currentQuote.text}"`;
                 document.getElementById('currentAuthor').textContent = `— ${currentQuote.author}`;
                 document.getElementById('currentAuthor').dataset.author = currentQuote.author;
+                
+                // Afficher l'auteur original si présent
+                const originalAuthorDiv = document.getElementById('originalAuthorDisplay');
+                if (currentQuote.originalAuthor) {
+                    originalAuthorDiv.textContent = `Citation de ${currentQuote.originalAuthor}`;
+                    originalAuthorDiv.style.display = 'block';
+                } else {
+                    originalAuthorDiv.style.display = 'none';
+                }
+                
                 document.getElementById('currentLikes').textContent = currentQuote.likes;
                 
                 const likeBtn = document.getElementById('likeBtn');
@@ -483,6 +496,15 @@
             document.getElementById('profilePage').classList.add('hidden');
             
             document.getElementById(page + 'Page').classList.remove('hidden');
+        }
+
+        function goToAddQuote() {
+            if (!currentUser) {
+                alert('Vous devez être connecté pour ajouter une citation');
+                showPage('auth');
+                return;
+            }
+            showPage('add-quote');
         }
 
         function toggleDarkMode() {
@@ -585,8 +607,15 @@
 
         function addQuote() {
             const text = document.getElementById('newQuoteText').value.trim();
+            const originalAuthor = document.getElementById('quoteOriginalAuthor').value.trim();
             
-            if (!currentUser || !text) {
+            if (!currentUser) {
+                alert('Vous devez être connecté pour ajouter une citation');
+                showPage('auth');
+                return;
+            }
+            
+            if (!text) {
                 alert('Veuillez écrire une citation');
                 return;
             }
@@ -595,6 +624,7 @@
                 id: Date.now(),
                 text,
                 author: currentUser.pseudo,
+                originalAuthor: originalAuthor || null,
                 likes: 0
             };
             
@@ -606,6 +636,7 @@
             }
             
             document.getElementById('newQuoteText').value = '';
+            document.getElementById('quoteOriginalAuthor').value = '';
             showPage('home');
             updateUI();
         }
@@ -647,9 +678,16 @@
                 userQuotes.forEach(quote => {
                     const div = document.createElement('div');
                     div.className = 'quote-item';
+                    
+                    let authorInfo = '';
+                    if (quote.originalAuthor) {
+                        authorInfo = `<div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.5rem;">Citation de ${quote.originalAuthor}</div>`;
+                    }
+                    
                     div.innerHTML = `
                         <p style="font-size: 1.125rem; font-style: italic; margin-bottom: 0.75rem;">"${quote.text}"</p>
-                        <div class="likes">
+                        ${authorInfo}
+                        <div class="likes" style="margin-top: 0.75rem;">
                             <span>❤️</span>
                             <span>${quote.likes} j'aime</span>
                         </div>
