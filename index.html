@@ -275,6 +275,20 @@
             display: none;
         }
 
+        .firebase-notice {
+            background-color: #d1fae5;
+            color: #065f46;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+        }
+
+        .dark .firebase-notice {
+            background-color: #064e3b;
+            color: #d1fae5;
+        }
+
         @media (max-width: 640px) {
             .quote-text {
                 font-size: 1.25rem;
@@ -312,6 +326,10 @@
         </header>
 
         <main>
+            <div class="firebase-notice">
+                ✅ <strong>Mode synchronisé</strong> : Les citations sont partagées en temps réel entre tous vos appareils !
+            </div>
+
             <!-- Page d'accueil -->
             <div id="homePage">
                 <div id="quoteDisplay" class="hidden">
@@ -407,65 +425,126 @@
         </main>
     </div>
 
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, onSnapshot, query, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBQQOZTANnZDk5fO3b51bWVkYytZbkw528",
+            authDomain: "quote-share-86d56.firebaseapp.com",
+            projectId: "quote-share-86d56",
+            storageBucket: "quote-share-86d56.firebasestorage.app",
+            messagingSenderId: "203729505574",
+            appId: "1:203729505574:web:6ef0a1e955b95ebe7105e7",
+            measurementId: "G-TMT5YR3NRQ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        window.db = db;
+        window.dbReady = true;
+        
+        // Charger les citations depuis Firebase
+        window.loadQuotesFromFirebase = async function() {
+            const quotesSnapshot = await getDocs(collection(db, 'quotes'));
+            const quotesFromDb = [];
+            quotesSnapshot.forEach((doc) => {
+                quotesFromDb.push({ firestoreId: doc.id, ...doc.data() });
+            });
+            return quotesFromDb;
+        };
+        
+        // Ajouter une citation à Firebase
+        window.addQuoteToFirebase = async function(quote) {
+            await addDoc(collection(db, 'quotes'), quote);
+        };
+        
+        // Mettre à jour les likes dans Firebase
+        window.updateQuoteLikesInFirebase = async function(firestoreId, newLikes) {
+            const quoteRef = doc(db, 'quotes', firestoreId);
+            await updateDoc(quoteRef, { likes: newLikes });
+        };
+        
+        // Gérer les utilisateurs
+        window.getUsersFromFirebase = async function() {
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const users = [];
+            usersSnapshot.forEach((doc) => {
+                users.push(doc.data());
+            });
+            return users;
+        };
+        
+        window.addUserToFirebase = async function(user) {
+            await setDoc(doc(db, 'users', user.pseudo), user);
+        };
+        
+        // Écouter les changements en temps réel
+        onSnapshot(collection(db, 'quotes'), (snapshot) => {
+            if (window.appReady) {
+                window.reloadQuotes();
+            }
+        });
+        
+        // Notifier que Firebase est prêt
+        if (window.initApp) {
+            window.initApp();
+        }
+    </script>
+
     <script>
-        // Fonction pour détecter si window.storage est disponible
-        const hasSharedStorage = typeof window.storage !== 'undefined';
-
-        // Fonctions utilitaires pour le stockage
-        async function getStorageItem(key, shared = false) {
-            if (hasSharedStorage && shared) {
-                try {
-                    const result = await window.storage.get(key, true);
-                    return result ? result.value : null;
-                } catch (error) {
-                    console.log('Erreur storage:', error);
-                    return localStorage.getItem(key);
-                }
-            }
-            return localStorage.getItem(key);
-        }
-
-        async function setStorageItem(key, value, shared = false) {
-            if (hasSharedStorage && shared) {
-                try {
-                    await window.storage.set(key, value, true);
-                    return;
-                } catch (error) {
-                    console.log('Erreur storage:', error);
-                }
-            }
-            localStorage.setItem(key, value);
-        }
-
         let currentUser = null;
         let quotes = [];
         let currentQuote = null;
         let likedQuotes = new Set();
         let isDark = true;
+        window.appReady = false;
+
+        window.initApp = async function() {
+            await init();
+        };
+
+        window.reloadQuotes = async function() {
+            if (!window.dbReady) return;
+            
+            try {
+                quotes = await window.loadQuotesFromFirebase();
+                if (quotes.length > 0 && !currentQuote) {
+                    currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
+                }
+                updateUI();
+            } catch (error) {
+                console.error('Erreur rechargement:', error);
+            }
+        };
 
         async function init() {
             try {
-                // Charger les citations (PARTAGÉES si possible)
-                const quotesData = await getStorageItem('quotes', true);
-                
-                if (quotesData) {
-                    quotes = JSON.parse(quotesData);
-                    if (quotes.length > 0) {
-                        currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
-                    }
+                // Attendre que Firebase soit prêt
+                while (!window.dbReady) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
-                // Charger l'utilisateur actuel (PRIVÉ)
-                const currentUserData = localStorage.getItem('current-user');
-                if (currentUserData) {
-                    currentUser = JSON.parse(currentUserData);
+                // Charger les citations depuis Firebase
+                quotes = await window.loadQuotesFromFirebase();
+                if (quotes.length > 0) {
+                    currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
+                }
+                
+                // Charger l'utilisateur actuel (local)
+                const userData = localStorage.getItem('current-user');
+                if (userData) {
+                    currentUser = JSON.parse(userData);
                     const likedData = localStorage.getItem(`liked-${currentUser.pseudo}`);
                     if (likedData) {
                         likedQuotes = new Set(JSON.parse(likedData));
                     }
                 }
+                
+                window.appReady = true;
             } catch (error) {
-                console.log('Première visite', error);
+                console.error('Erreur initialisation:', error);
             }
             
             updateUI();
@@ -551,8 +630,7 @@
             }
             
             try {
-                const usersData = await getStorageItem('users', true);
-                const users = usersData ? JSON.parse(usersData) : [];
+                const users = await window.getUsersFromFirebase();
                 const user = users.find(u => u.pseudo === pseudo && u.password === password);
                 
                 if (user) {
@@ -560,11 +638,7 @@
                     localStorage.setItem('current-user', JSON.stringify(user));
                     
                     const likedData = localStorage.getItem(`liked-${user.pseudo}`);
-                    if (likedData) {
-                        likedQuotes = new Set(JSON.parse(likedData));
-                    } else {
-                        likedQuotes = new Set();
-                    }
+                    likedQuotes = likedData ? new Set(JSON.parse(likedData)) : new Set();
                     
                     document.getElementById('authPseudo').value = '';
                     document.getElementById('authPassword').value = '';
@@ -575,7 +649,7 @@
                 }
             } catch (error) {
                 console.error('Erreur connexion:', error);
-                alert('Identifiants incorrects');
+                alert('Erreur de connexion');
             }
         }
 
@@ -589,8 +663,7 @@
             }
             
             try {
-                const usersData = await getStorageItem('users', true);
-                const users = usersData ? JSON.parse(usersData) : [];
+                const users = await window.getUsersFromFirebase();
                 
                 if (users.find(u => u.pseudo === pseudo)) {
                     alert('Ce pseudo existe déjà');
@@ -598,8 +671,7 @@
                 }
                 
                 const newUser = { pseudo, password };
-                users.push(newUser);
-                await setStorageItem('users', JSON.stringify(users), true);
+                await window.addUserToFirebase(newUser);
                 
                 currentUser = newUser;
                 localStorage.setItem('current-user', JSON.stringify(newUser));
@@ -610,7 +682,7 @@
                 updateUI();
             } catch (error) {
                 console.error('Erreur inscription:', error);
-                alert('Erreur lors de l\'inscription: ' + error.message);
+                alert('Erreur lors de l\'inscription');
             }
         }
 
@@ -645,32 +717,40 @@
                 likes: 0
             };
             
-            quotes.push(newQuote);
-            await setStorageItem('quotes', JSON.stringify(quotes), true);
-            
-            if (!currentQuote) {
-                currentQuote = newQuote;
+            try {
+                await window.addQuoteToFirebase(newQuote);
+                await window.reloadQuotes();
+                
+                if (!currentQuote) {
+                    currentQuote = newQuote;
+                }
+                
+                document.getElementById('newQuoteText').value = '';
+                document.getElementById('quoteOriginalAuthor').value = '';
+                showPage('home');
+                updateUI();
+            } catch (error) {
+                console.error('Erreur ajout citation:', error);
+                alert('Erreur lors de l\'ajout de la citation');
             }
-            
-            document.getElementById('newQuoteText').value = '';
-            document.getElementById('quoteOriginalAuthor').value = '';
-            showPage('home');
-            updateUI();
         }
 
         async function likeQuote() {
             if (!currentUser || !currentQuote || likedQuotes.has(currentQuote.id)) return;
             
-            quotes = quotes.map(q => 
-                q.id === currentQuote.id ? { ...q, likes: q.likes + 1 } : q
-            );
-            await setStorageItem('quotes', JSON.stringify(quotes), true);
-            
-            likedQuotes.add(currentQuote.id);
-            localStorage.setItem(`liked-${currentUser.pseudo}`, JSON.stringify([...likedQuotes]));
-            
-            currentQuote = quotes.find(q => q.id === currentQuote.id);
-            updateUI();
+            try {
+                const newLikes = currentQuote.likes + 1;
+                await window.updateQuoteLikesInFirebase(currentQuote.firestoreId, newLikes);
+                
+                likedQuotes.add(currentQuote.id);
+                localStorage.setItem(`liked-${currentUser.pseudo}`, JSON.stringify([...likedQuotes]));
+                
+                await window.reloadQuotes();
+                currentQuote = quotes.find(q => q.id === currentQuote.id);
+                updateUI();
+            } catch (error) {
+                console.error('Erreur like:', error);
+            }
         }
 
         function nextQuote() {
