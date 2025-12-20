@@ -416,22 +416,23 @@
         let isDark = true;
 
         async function init() {
+            // Utiliser localStorage au lieu de window.storage
             try {
-                const quotesData = await window.storage.get('quotes', true);
-                const currentUserData = await window.storage.get('current-user', false);
+                const quotesData = localStorage.getItem('quotes');
+                const currentUserData = localStorage.getItem('current-user');
                 
                 if (quotesData) {
-                    quotes = JSON.parse(quotesData.value);
+                    quotes = JSON.parse(quotesData);
                     if (quotes.length > 0) {
                         currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
                     }
                 }
                 
                 if (currentUserData) {
-                    currentUser = JSON.parse(currentUserData.value);
-                    const likedData = await window.storage.get(`liked-${currentUser.pseudo}`, false);
+                    currentUser = JSON.parse(currentUserData);
+                    const likedData = localStorage.getItem(`liked-${currentUser.pseudo}`);
                     if (likedData) {
-                        likedQuotes = new Set(JSON.parse(likedData.value));
+                        likedQuotes = new Set(JSON.parse(likedData));
                     }
                 }
             } catch (error) {
@@ -490,7 +491,7 @@
             document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
         }
 
-        async function login() {
+        function login() {
             const pseudo = document.getElementById('authPseudo').value;
             const password = document.getElementById('authPassword').value;
             
@@ -499,77 +500,69 @@
                 return;
             }
             
-            try {
-                const usersData = await window.storage.get('users', true);
-                const users = usersData ? JSON.parse(usersData.value) : [];
-                const user = users.find(u => u.pseudo === pseudo && u.password === password);
+            const usersData = localStorage.getItem('users');
+            const users = usersData ? JSON.parse(usersData) : [];
+            const user = users.find(u => u.pseudo === pseudo && u.password === password);
+            
+            if (user) {
+                currentUser = user;
+                localStorage.setItem('current-user', JSON.stringify(user));
                 
-                if (user) {
-                    currentUser = user;
-                    await window.storage.set('current-user', JSON.stringify(user), false);
-                    
-                    try {
-                        const likedData = await window.storage.get(`liked-${user.pseudo}`, false);
-                        likedQuotes = new Set(JSON.parse(likedData.value));
-                    } catch {
-                        likedQuotes = new Set();
-                    }
-                    
-                    document.getElementById('authPseudo').value = '';
-                    document.getElementById('authPassword').value = '';
-                    showPage('home');
-                    updateUI();
+                const likedData = localStorage.getItem(`liked-${user.pseudo}`);
+                if (likedData) {
+                    likedQuotes = new Set(JSON.parse(likedData));
                 } else {
-                    alert('Identifiants incorrects');
+                    likedQuotes = new Set();
                 }
-            } catch {
-                alert('Identifiants incorrects');
-            }
-        }
-
-        async function register() {
-            const pseudo = document.getElementById('authPseudo').value;
-            const password = document.getElementById('authPassword').value;
-            
-            if (!pseudo || !password) {
-                alert('Veuillez remplir tous les champs');
-                return;
-            }
-            
-            try {
-                const usersData = await window.storage.get('users', true);
-                const users = usersData ? JSON.parse(usersData.value) : [];
-                
-                if (users.find(u => u.pseudo === pseudo)) {
-                    alert('Ce pseudo existe déjà');
-                    return;
-                }
-                
-                const newUser = { pseudo, password };
-                users.push(newUser);
-                await window.storage.set('users', JSON.stringify(users), true);
-                
-                currentUser = newUser;
-                await window.storage.set('current-user', JSON.stringify(newUser), false);
                 
                 document.getElementById('authPseudo').value = '';
                 document.getElementById('authPassword').value = '';
                 showPage('home');
                 updateUI();
-            } catch (error) {
-                alert('Erreur lors de l\'inscription');
+            } else {
+                alert('Identifiants incorrects');
             }
         }
 
-        async function logout() {
-            currentUser = null;
-            likedQuotes = new Set();
-            await window.storage.delete('current-user', false);
+        function register() {
+            const pseudo = document.getElementById('authPseudo').value;
+            const password = document.getElementById('authPassword').value;
+            
+            if (!pseudo || !password) {
+                alert('Veuillez remplir tous les champs');
+                return;
+            }
+            
+            const usersData = localStorage.getItem('users');
+            const users = usersData ? JSON.parse(usersData) : [];
+            
+            if (users.find(u => u.pseudo === pseudo)) {
+                alert('Ce pseudo existe déjà');
+                return;
+            }
+            
+            const newUser = { pseudo, password };
+            users.push(newUser);
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            currentUser = newUser;
+            localStorage.setItem('current-user', JSON.stringify(newUser));
+            
+            document.getElementById('authPseudo').value = '';
+            document.getElementById('authPassword').value = '';
             showPage('home');
             updateUI();
         }
 
-        async function addQuote() {
+        function logout() {
+            currentUser = null;
+            likedQuotes = new Set();
+            localStorage.removeItem('current-user');
+            showPage('home');
+            updateUI();
+        }
+
+        function addQuote() {
             const text = document.getElementById('newQuoteText').value.trim();
             
             if (!currentUser || !text) {
@@ -585,7 +578,7 @@
             };
             
             quotes.push(newQuote);
-            await window.storage.set('quotes', JSON.stringify(quotes), true);
+            localStorage.setItem('quotes', JSON.stringify(quotes));
             
             if (!currentQuote) {
                 currentQuote = newQuote;
@@ -596,16 +589,16 @@
             updateUI();
         }
 
-        async function likeQuote() {
+        function likeQuote() {
             if (!currentUser || !currentQuote || likedQuotes.has(currentQuote.id)) return;
             
             quotes = quotes.map(q => 
                 q.id === currentQuote.id ? { ...q, likes: q.likes + 1 } : q
             );
-            await window.storage.set('quotes', JSON.stringify(quotes), true);
+            localStorage.setItem('quotes', JSON.stringify(quotes));
             
             likedQuotes.add(currentQuote.id);
-            await window.storage.set(`liked-${currentUser.pseudo}`, JSON.stringify([...likedQuotes]), false);
+            localStorage.setItem(`liked-${currentUser.pseudo}`, JSON.stringify([...likedQuotes]));
             
             currentQuote = quotes.find(q => q.id === currentQuote.id);
             updateUI();
