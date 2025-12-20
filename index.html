@@ -263,13 +263,6 @@
             color: #6b7280;
         }
 
-        .icon {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            vertical-align: middle;
-        }
-
         .loading {
             display: flex;
             justify-content: center;
@@ -325,7 +318,10 @@
                     <div class="card quote-card">
                         <p class="quote-text" id="currentQuoteText"></p>
                         <div class="quote-footer">
-                            <span class="author" id="currentAuthor" onclick="viewProfile(this.dataset.author)"></span>
+                            <div>
+                                <span class="author" id="currentAuthor" onclick="viewProfile(this.dataset.author)"></span>
+                                <div id="originalAuthorDisplay" style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;"></div>
+                            </div>
                             <div class="likes">
                                 <span>❤️</span>
                                 <span id="currentLikes"></span>
@@ -418,19 +414,20 @@
         let likedQuotes = new Set();
         let isDark = true;
 
-        function init() {
-            // Utiliser localStorage au lieu de window.storage
+        async function init() {
             try {
-                const quotesData = localStorage.getItem('quotes');
-                const currentUserData = localStorage.getItem('current-user');
+                // Charger les citations (PARTAGÉES entre tous)
+                const quotesData = await window.storage.get('quotes', true);
                 
                 if (quotesData) {
-                    quotes = JSON.parse(quotesData);
+                    quotes = JSON.parse(quotesData.value);
                     if (quotes.length > 0) {
                         currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
                     }
                 }
                 
+                // Charger l'utilisateur actuel (PRIVÉ)
+                const currentUserData = localStorage.getItem('current-user');
                 if (currentUserData) {
                     currentUser = JSON.parse(currentUserData);
                     const likedData = localStorage.getItem(`liked-${currentUser.pseudo}`);
@@ -464,7 +461,6 @@
                 document.getElementById('currentAuthor').textContent = `— ${currentQuote.author}`;
                 document.getElementById('currentAuthor').dataset.author = currentQuote.author;
                 
-                // Afficher l'auteur original si présent
                 const originalAuthorDiv = document.getElementById('originalAuthorDisplay');
                 if (currentQuote.originalAuthor) {
                     originalAuthorDiv.textContent = `Citation de ${currentQuote.originalAuthor}`;
@@ -490,23 +486,18 @@
         }
 
         function showPage(page) {
-            console.log('Affichage de la page:', page);
             document.getElementById('homePage').classList.add('hidden');
             document.getElementById('authPage').classList.add('hidden');
             document.getElementById('add-quotePage').classList.add('hidden');
             document.getElementById('profilePage').classList.add('hidden');
             
             const pageElement = document.getElementById(page + 'Page');
-            console.log('Element trouvé:', pageElement);
             if (pageElement) {
                 pageElement.classList.remove('hidden');
-            } else {
-                console.error('Page non trouvée:', page + 'Page');
             }
         }
 
         function goToAddQuote() {
-            console.log('goToAddQuote appelé, currentUser:', currentUser);
             if (!currentUser) {
                 alert('Vous devez être connecté pour ajouter une citation');
                 showPage('auth');
@@ -521,11 +512,9 @@
             document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
         }
 
-        function login() {
+        async function login() {
             const pseudo = document.getElementById('authPseudo').value.trim();
             const password = document.getElementById('authPassword').value.trim();
-            
-            console.log('Tentative connexion:', pseudo);
             
             if (!pseudo || !password) {
                 alert('Veuillez remplir tous les champs');
@@ -533,12 +522,9 @@
             }
             
             try {
-                const usersData = localStorage.getItem('users');
-                const users = usersData ? JSON.parse(usersData) : [];
+                const usersData = await window.storage.get('users', true);
+                const users = usersData ? JSON.parse(usersData.value) : [];
                 const user = users.find(u => u.pseudo === pseudo && u.password === password);
-                
-                console.log('Utilisateurs:', users);
-                console.log('Utilisateur trouvé:', user);
                 
                 if (user) {
                     currentUser = user;
@@ -560,15 +546,13 @@
                 }
             } catch (error) {
                 console.error('Erreur connexion:', error);
-                alert('Erreur lors de la connexion: ' + error.message);
+                alert('Identifiants incorrects');
             }
         }
 
-        function register() {
+        async function register() {
             const pseudo = document.getElementById('authPseudo').value.trim();
             const password = document.getElementById('authPassword').value.trim();
-            
-            console.log('Tentative inscription:', pseudo, password);
             
             if (!pseudo || !password) {
                 alert('Veuillez remplir tous les champs');
@@ -576,10 +560,8 @@
             }
             
             try {
-                const usersData = localStorage.getItem('users');
-                const users = usersData ? JSON.parse(usersData) : [];
-                
-                console.log('Utilisateurs existants:', users);
+                const usersData = await window.storage.get('users', true);
+                const users = usersData ? JSON.parse(usersData.value) : [];
                 
                 if (users.find(u => u.pseudo === pseudo)) {
                     alert('Ce pseudo existe déjà');
@@ -588,12 +570,10 @@
                 
                 const newUser = { pseudo, password };
                 users.push(newUser);
-                localStorage.setItem('users', JSON.stringify(users));
+                await window.storage.set('users', JSON.stringify(users), true);
                 
                 currentUser = newUser;
                 localStorage.setItem('current-user', JSON.stringify(newUser));
-                
-                console.log('Inscription réussie!', newUser);
                 
                 document.getElementById('authPseudo').value = '';
                 document.getElementById('authPassword').value = '';
@@ -613,7 +593,7 @@
             updateUI();
         }
 
-        function addQuote() {
+        async function addQuote() {
             const text = document.getElementById('newQuoteText').value.trim();
             const originalAuthor = document.getElementById('quoteOriginalAuthor').value.trim();
             
@@ -637,7 +617,7 @@
             };
             
             quotes.push(newQuote);
-            localStorage.setItem('quotes', JSON.stringify(quotes));
+            await window.storage.set('quotes', JSON.stringify(quotes), true);
             
             if (!currentQuote) {
                 currentQuote = newQuote;
@@ -649,13 +629,13 @@
             updateUI();
         }
 
-        function likeQuote() {
+        async function likeQuote() {
             if (!currentUser || !currentQuote || likedQuotes.has(currentQuote.id)) return;
             
             quotes = quotes.map(q => 
                 q.id === currentQuote.id ? { ...q, likes: q.likes + 1 } : q
             );
-            localStorage.setItem('quotes', JSON.stringify(quotes));
+            await window.storage.set('quotes', JSON.stringify(quotes), true);
             
             likedQuotes.add(currentQuote.id);
             localStorage.setItem(`liked-${currentUser.pseudo}`, JSON.stringify([...likedQuotes]));
