@@ -415,7 +415,7 @@
         let likedQuotes = new Set();
         let isDark = true;
 
-        async function init() {
+        function init() {
             // Utiliser localStorage au lieu de window.storage
             try {
                 const quotesData = localStorage.getItem('quotes');
@@ -436,7 +436,7 @@
                     }
                 }
             } catch (error) {
-                console.log('Première visite');
+                console.log('Première visite', error);
             }
             
             updateUI();
@@ -492,66 +492,87 @@
         }
 
         function login() {
-            const pseudo = document.getElementById('authPseudo').value;
-            const password = document.getElementById('authPassword').value;
+            const pseudo = document.getElementById('authPseudo').value.trim();
+            const password = document.getElementById('authPassword').value.trim();
+            
+            console.log('Tentative connexion:', pseudo);
             
             if (!pseudo || !password) {
                 alert('Veuillez remplir tous les champs');
                 return;
             }
             
-            const usersData = localStorage.getItem('users');
-            const users = usersData ? JSON.parse(usersData) : [];
-            const user = users.find(u => u.pseudo === pseudo && u.password === password);
-            
-            if (user) {
-                currentUser = user;
-                localStorage.setItem('current-user', JSON.stringify(user));
+            try {
+                const usersData = localStorage.getItem('users');
+                const users = usersData ? JSON.parse(usersData) : [];
+                const user = users.find(u => u.pseudo === pseudo && u.password === password);
                 
-                const likedData = localStorage.getItem(`liked-${user.pseudo}`);
-                if (likedData) {
-                    likedQuotes = new Set(JSON.parse(likedData));
+                console.log('Utilisateurs:', users);
+                console.log('Utilisateur trouvé:', user);
+                
+                if (user) {
+                    currentUser = user;
+                    localStorage.setItem('current-user', JSON.stringify(user));
+                    
+                    const likedData = localStorage.getItem(`liked-${user.pseudo}`);
+                    if (likedData) {
+                        likedQuotes = new Set(JSON.parse(likedData));
+                    } else {
+                        likedQuotes = new Set();
+                    }
+                    
+                    document.getElementById('authPseudo').value = '';
+                    document.getElementById('authPassword').value = '';
+                    showPage('home');
+                    updateUI();
                 } else {
-                    likedQuotes = new Set();
+                    alert('Identifiants incorrects');
                 }
+            } catch (error) {
+                console.error('Erreur connexion:', error);
+                alert('Erreur lors de la connexion: ' + error.message);
+            }
+        }
+
+        function register() {
+            const pseudo = document.getElementById('authPseudo').value.trim();
+            const password = document.getElementById('authPassword').value.trim();
+            
+            console.log('Tentative inscription:', pseudo, password);
+            
+            if (!pseudo || !password) {
+                alert('Veuillez remplir tous les champs');
+                return;
+            }
+            
+            try {
+                const usersData = localStorage.getItem('users');
+                const users = usersData ? JSON.parse(usersData) : [];
+                
+                console.log('Utilisateurs existants:', users);
+                
+                if (users.find(u => u.pseudo === pseudo)) {
+                    alert('Ce pseudo existe déjà');
+                    return;
+                }
+                
+                const newUser = { pseudo, password };
+                users.push(newUser);
+                localStorage.setItem('users', JSON.stringify(users));
+                
+                currentUser = newUser;
+                localStorage.setItem('current-user', JSON.stringify(newUser));
+                
+                console.log('Inscription réussie!', newUser);
                 
                 document.getElementById('authPseudo').value = '';
                 document.getElementById('authPassword').value = '';
                 showPage('home');
                 updateUI();
-            } else {
-                alert('Identifiants incorrects');
+            } catch (error) {
+                console.error('Erreur inscription:', error);
+                alert('Erreur lors de l\'inscription: ' + error.message);
             }
-        }
-
-        function register() {
-            const pseudo = document.getElementById('authPseudo').value;
-            const password = document.getElementById('authPassword').value;
-            
-            if (!pseudo || !password) {
-                alert('Veuillez remplir tous les champs');
-                return;
-            }
-            
-            const usersData = localStorage.getItem('users');
-            const users = usersData ? JSON.parse(usersData) : [];
-            
-            if (users.find(u => u.pseudo === pseudo)) {
-                alert('Ce pseudo existe déjà');
-                return;
-            }
-            
-            const newUser = { pseudo, password };
-            users.push(newUser);
-            localStorage.setItem('users', JSON.stringify(users));
-            
-            currentUser = newUser;
-            localStorage.setItem('current-user', JSON.stringify(newUser));
-            
-            document.getElementById('authPseudo').value = '';
-            document.getElementById('authPassword').value = '';
-            showPage('home');
-            updateUI();
         }
 
         function logout() {
