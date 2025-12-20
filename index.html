@@ -1,0 +1,378 @@
+import React, { useState, useEffect } from 'react';
+import { Heart, SkipForward, Moon, Sun, Plus, User, LogOut, TrendingUp } from 'lucide-react';
+
+export default function QuoteShare() {
+  const [darkMode, setDarkMode] = useState(true);
+  const [currentPage, setCurrentPage] = useState('home');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [quotes, setQuotes] = useState([]);
+  const [currentQuote, setCurrentQuote] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [likedQuotes, setLikedQuotes] = useState(new Set());
+  
+  // Formulaires
+  const [loginForm, setLoginForm] = useState({ pseudo: '', password: '' });
+  const [newQuoteText, setNewQuoteText] = useState('');
+  const [profileUser, setProfileUser] = useState(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const quotesData = await window.storage.get('quotes', true);
+      const usersData = await window.storage.get('users', true);
+      const currentUserData = await window.storage.get('current-user', false);
+      
+      if (quotesData) {
+        const parsedQuotes = JSON.parse(quotesData.value);
+        setQuotes(parsedQuotes);
+        if (parsedQuotes.length > 0) {
+          setCurrentQuote(parsedQuotes[Math.floor(Math.random() * parsedQuotes.length)]);
+        }
+      }
+      
+      if (currentUserData) {
+        const user = JSON.parse(currentUserData.value);
+        setCurrentUser(user);
+        const likedData = await window.storage.get(`liked-${user.pseudo}`, false);
+        if (likedData) {
+          setLikedQuotes(new Set(JSON.parse(likedData.value)));
+        }
+      }
+    } catch (error) {
+      console.log('Première visite, initialisation...');
+    }
+    setLoading(false);
+  };
+
+  const saveQuotes = async (newQuotes) => {
+    await window.storage.set('quotes', JSON.stringify(newQuotes), true);
+    setQuotes(newQuotes);
+  };
+
+  const saveUsers = async (users) => {
+    await window.storage.set('users', JSON.stringify(users), true);
+  };
+
+  const getUsers = async () => {
+    try {
+      const data = await window.storage.get('users', true);
+      return data ? JSON.parse(data.value) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handleLogin = async () => {
+    const users = await getUsers();
+    const user = users.find(u => u.pseudo === loginForm.pseudo && u.password === loginForm.password);
+    
+    if (user) {
+      setCurrentUser(user);
+      await window.storage.set('current-user', JSON.stringify(user), false);
+      const likedData = await window.storage.get(`liked-${user.pseudo}`, false);
+      if (likedData) {
+        setLikedQuotes(new Set(JSON.parse(likedData.value)));
+      }
+      setCurrentPage('home');
+      setLoginForm({ pseudo: '', password: '' });
+    } else {
+      alert('Identifiants incorrects');
+    }
+  };
+
+  const handleRegister = async () => {
+    const users = await getUsers();
+    
+    if (users.find(u => u.pseudo === loginForm.pseudo)) {
+      alert('Ce pseudo existe déjà');
+      return;
+    }
+    
+    const newUser = { pseudo: loginForm.pseudo, password: loginForm.password };
+    users.push(newUser);
+    await saveUsers(users);
+    setCurrentUser(newUser);
+    await window.storage.set('current-user', JSON.stringify(newUser), false);
+    setCurrentPage('home');
+    setLoginForm({ pseudo: '', password: '' });
+  };
+
+  const handleLogout = async () => {
+    setCurrentUser(null);
+    await window.storage.delete('current-user', false);
+    setCurrentPage('home');
+  };
+
+  const handleAddQuote = async () => {
+    if (!currentUser || !newQuoteText.trim()) return;
+    
+    const newQuote = {
+      id: Date.now(),
+      text: newQuoteText,
+      author: currentUser.pseudo,
+      likes: 0
+    };
+    
+    const updatedQuotes = [...quotes, newQuote];
+    await saveQuotes(updatedQuotes);
+    
+    if (quotes.length === 0) {
+      setCurrentQuote(newQuote);
+    }
+    
+    setNewQuoteText('');
+    setCurrentPage('home');
+  };
+
+  const handleLike = async () => {
+    if (!currentUser || !currentQuote || likedQuotes.has(currentQuote.id)) return;
+    
+    const updatedQuotes = quotes.map(q => 
+      q.id === currentQuote.id ? { ...q, likes: q.likes + 1 } : q
+    );
+    await saveQuotes(updatedQuotes);
+    
+    const newLiked = new Set(likedQuotes);
+    newLiked.add(currentQuote.id);
+    setLikedQuotes(newLiked);
+    await window.storage.set(`liked-${currentUser.pseudo}`, JSON.stringify([...newLiked]), false);
+    
+    setCurrentQuote(updatedQuotes.find(q => q.id === currentQuote.id));
+  };
+
+  const handleNext = () => {
+    if (quotes.length > 0) {
+      const nextQuote = quotes[Math.floor(Math.random() * quotes.length)];
+      setCurrentQuote(nextQuote);
+    }
+  };
+
+  const viewProfile = async (pseudo) => {
+    const userQuotes = quotes.filter(q => q.author === pseudo).sort((a, b) => b.likes - a.likes);
+    setProfileUser({ pseudo, quotes: userQuotes });
+    setCurrentPage('profile');
+  };
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+        <div className="text-2xl">Chargement...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+      {/* Header */}
+      <header className="p-6 flex justify-between items-center">
+        <h1 
+          className="text-2xl font-bold cursor-pointer hover:opacity-70 transition-opacity"
+          onClick={() => setCurrentPage('home')}
+        >
+          QuoteShare
+        </h1>
+        
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
+          >
+            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          
+          {currentUser ? (
+            <>
+              <button
+                onClick={() => setCurrentPage('add-quote')}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
+              >
+                <Plus size={20} />
+              </button>
+              <button
+                onClick={() => viewProfile(currentUser.pseudo)}
+                className={`px-4 py-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
+              >
+                <User size={20} className="inline mr-2" />
+                {currentUser.pseudo}
+              </button>
+              <button
+                onClick={handleLogout}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
+              >
+                <LogOut size={20} />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setCurrentPage('auth')}
+              className={`px-4 py-2 rounded-lg transition-colors ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
+            >
+              Connexion
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-6 py-12">
+        {currentPage === 'home' && (
+          <div className="max-w-2xl mx-auto">
+            {currentQuote ? (
+              <div className="space-y-8">
+                <div className={`p-8 rounded-2xl shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                  <p className="text-2xl italic mb-6 leading-relaxed">"{currentQuote.text}"</p>
+                  <div className="flex justify-between items-center">
+                    <button
+                      onClick={() => viewProfile(currentQuote.author)}
+                      className="text-lg text-blue-500 hover:text-blue-400 transition-colors"
+                    >
+                      — {currentQuote.author}
+                    </button>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Heart size={16} />
+                      <span>{currentQuote.likes}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={handleLike}
+                    disabled={!currentUser || likedQuotes.has(currentQuote.id)}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                      !currentUser || likedQuotes.has(currentQuote.id)
+                        ? 'bg-gray-600 cursor-not-allowed opacity-50'
+                        : darkMode
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-red-500 hover:bg-red-600 text-white'
+                    }`}
+                  >
+                    <Heart size={20} className="inline mr-2" />
+                    {likedQuotes.has(currentQuote.id) ? 'Déjà liké' : 'J\'aime'}
+                  </button>
+                  
+                  <button
+                    onClick={handleNext}
+                    className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                      darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                    }`}
+                  >
+                    <SkipForward size={20} className="inline mr-2" />
+                    Suivante
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className={`p-12 rounded-2xl text-center ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <p className="text-xl mb-4">Aucune citation disponible</p>
+                <p className="text-gray-500">Connectez-vous pour ajouter la première citation !</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentPage === 'auth' && (
+          <div className="max-w-md mx-auto">
+            <div className={`p-8 rounded-2xl shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <h2 className="text-2xl font-bold mb-6">Connexion / Inscription</h2>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Pseudo"
+                  value={loginForm.pseudo}
+                  onChange={(e) => setLoginForm({...loginForm, pseudo: e.target.value})}
+                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                  className={`w-full px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
+                />
+                <input
+                  type="password"
+                  placeholder="Mot de passe"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                  className={`w-full px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
+                />
+                <div className="flex gap-4">
+                  <button
+                    onClick={handleLogin}
+                    className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium"
+                  >
+                    Connexion
+                  </button>
+                  <button
+                    onClick={handleRegister}
+                    className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                      darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                    }`}
+                  >
+                    Inscription
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentPage === 'add-quote' && (
+          <div className="max-w-2xl mx-auto">
+            <div className={`p-8 rounded-2xl shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <h2 className="text-2xl font-bold mb-6">Ajouter une citation</h2>
+              <div className="space-y-4">
+                <textarea
+                  value={newQuoteText}
+                  onChange={(e) => setNewQuoteText(e.target.value)}
+                  placeholder="Écrivez votre citation..."
+                  className={`w-full px-4 py-3 rounded-lg h-32 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
+                />
+                <button
+                  onClick={handleAddQuote}
+                  className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium"
+                >
+                  Publier
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentPage === 'profile' && profileUser && (
+          <div className="max-w-3xl mx-auto">
+            <div className={`p-8 rounded-2xl shadow-xl mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
+                <User size={32} />
+                {profileUser.pseudo}
+              </h2>
+              <p className="text-gray-500">
+                {profileUser.quotes.length} citation{profileUser.quotes.length > 1 ? 's' : ''}
+              </p>
+            </div>
+
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <TrendingUp size={20} />
+              Citations les plus appréciées
+            </h3>
+            
+            <div className="space-y-4">
+              {profileUser.quotes.length > 0 ? (
+                profileUser.quotes.map((quote) => (
+                  <div key={quote.id} className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <p className="text-lg italic mb-3">"{quote.text}"</p>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Heart size={16} />
+                      <span>{quote.likes} j'aime</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-8">Aucune citation pour le moment</p>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
