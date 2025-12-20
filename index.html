@@ -1,378 +1,655 @@
-import React, { useState, useEffect } from 'react';
-import { Heart, SkipForward, Moon, Sun, Plus, User, LogOut, TrendingUp } from 'lucide-react';
-
-export default function QuoteShare() {
-  const [darkMode, setDarkMode] = useState(true);
-  const [currentPage, setCurrentPage] = useState('home');
-  const [currentUser, setCurrentUser] = useState(null);
-  const [quotes, setQuotes] = useState([]);
-  const [currentQuote, setCurrentQuote] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [likedQuotes, setLikedQuotes] = useState(new Set());
-  
-  // Formulaires
-  const [loginForm, setLoginForm] = useState({ pseudo: '', password: '' });
-  const [newQuoteText, setNewQuoteText] = useState('');
-  const [profileUser, setProfileUser] = useState(null);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const quotesData = await window.storage.get('quotes', true);
-      const usersData = await window.storage.get('users', true);
-      const currentUserData = await window.storage.get('current-user', false);
-      
-      if (quotesData) {
-        const parsedQuotes = JSON.parse(quotesData.value);
-        setQuotes(parsedQuotes);
-        if (parsedQuotes.length > 0) {
-          setCurrentQuote(parsedQuotes[Math.floor(Math.random() * parsedQuotes.length)]);
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuoteShare - Partagez vos citations</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-      }
-      
-      if (currentUserData) {
-        const user = JSON.parse(currentUserData.value);
-        setCurrentUser(user);
-        const likedData = await window.storage.get(`liked-${user.pseudo}`, false);
-        if (likedData) {
-          setLikedQuotes(new Set(JSON.parse(likedData.value)));
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+            min-height: 100vh;
         }
-      }
-    } catch (error) {
-      console.log('Première visite, initialisation...');
-    }
-    setLoading(false);
-  };
 
-  const saveQuotes = async (newQuotes) => {
-    await window.storage.set('quotes', JSON.stringify(newQuotes), true);
-    setQuotes(newQuotes);
-  };
+        body.dark {
+            background-color: #111827;
+            color: #ffffff;
+        }
 
-  const saveUsers = async (users) => {
-    await window.storage.set('users', JSON.stringify(users), true);
-  };
+        body.light {
+            background-color: #f9fafb;
+            color: #111827;
+        }
 
-  const getUsers = async () => {
-    try {
-      const data = await window.storage.get('users', true);
-      return data ? JSON.parse(data.value) : [];
-    } catch {
-      return [];
-    }
-  };
+        header {
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
 
-  const handleLogin = async () => {
-    const users = await getUsers();
-    const user = users.find(u => u.pseudo === loginForm.pseudo && u.password === loginForm.password);
-    
-    if (user) {
-      setCurrentUser(user);
-      await window.storage.set('current-user', JSON.stringify(user), false);
-      const likedData = await window.storage.get(`liked-${user.pseudo}`, false);
-      if (likedData) {
-        setLikedQuotes(new Set(JSON.parse(likedData.value)));
-      }
-      setCurrentPage('home');
-      setLoginForm({ pseudo: '', password: '' });
-    } else {
-      alert('Identifiants incorrects');
-    }
-  };
+        h1 {
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
 
-  const handleRegister = async () => {
-    const users = await getUsers();
-    
-    if (users.find(u => u.pseudo === loginForm.pseudo)) {
-      alert('Ce pseudo existe déjà');
-      return;
-    }
-    
-    const newUser = { pseudo: loginForm.pseudo, password: loginForm.password };
-    users.push(newUser);
-    await saveUsers(users);
-    setCurrentUser(newUser);
-    await window.storage.set('current-user', JSON.stringify(newUser), false);
-    setCurrentPage('home');
-    setLoginForm({ pseudo: '', password: '' });
-  };
+        h1:hover {
+            opacity: 0.7;
+        }
 
-  const handleLogout = async () => {
-    setCurrentUser(null);
-    await window.storage.delete('current-user', false);
-    setCurrentPage('home');
-  };
+        .header-buttons {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
 
-  const handleAddQuote = async () => {
-    if (!currentUser || !newQuoteText.trim()) return;
-    
-    const newQuote = {
-      id: Date.now(),
-      text: newQuoteText,
-      author: currentUser.pseudo,
-      likes: 0
-    };
-    
-    const updatedQuotes = [...quotes, newQuote];
-    await saveQuotes(updatedQuotes);
-    
-    if (quotes.length === 0) {
-      setCurrentQuote(newQuote);
-    }
-    
-    setNewQuoteText('');
-    setCurrentPage('home');
-  };
+        button {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
 
-  const handleLike = async () => {
-    if (!currentUser || !currentQuote || likedQuotes.has(currentQuote.id)) return;
-    
-    const updatedQuotes = quotes.map(q => 
-      q.id === currentQuote.id ? { ...q, likes: q.likes + 1 } : q
-    );
-    await saveQuotes(updatedQuotes);
-    
-    const newLiked = new Set(likedQuotes);
-    newLiked.add(currentQuote.id);
-    setLikedQuotes(newLiked);
-    await window.storage.set(`liked-${currentUser.pseudo}`, JSON.stringify([...newLiked]), false);
-    
-    setCurrentQuote(updatedQuotes.find(q => q.id === currentQuote.id));
-  };
+        .dark button:not(.btn-primary):not(.btn-danger) {
+            background-color: #1f2937;
+            color: white;
+        }
 
-  const handleNext = () => {
-    if (quotes.length > 0) {
-      const nextQuote = quotes[Math.floor(Math.random() * quotes.length)];
-      setCurrentQuote(nextQuote);
-    }
-  };
+        .dark button:not(.btn-primary):not(.btn-danger):hover {
+            background-color: #374151;
+        }
 
-  const viewProfile = async (pseudo) => {
-    const userQuotes = quotes.filter(q => q.author === pseudo).sort((a, b) => b.likes - a.likes);
-    setProfileUser({ pseudo, quotes: userQuotes });
-    setCurrentPage('profile');
-  };
+        .light button:not(.btn-primary):not(.btn-danger) {
+            background-color: white;
+            color: #111827;
+        }
 
-  if (loading) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
-        <div className="text-2xl">Chargement...</div>
-      </div>
-    );
-  }
+        .light button:not(.btn-primary):not(.btn-danger):hover {
+            background-color: #e5e7eb;
+        }
 
-  return (
-    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
-      {/* Header */}
-      <header className="p-6 flex justify-between items-center">
-        <h1 
-          className="text-2xl font-bold cursor-pointer hover:opacity-70 transition-opacity"
-          onClick={() => setCurrentPage('home')}
-        >
-          QuoteShare
-        </h1>
-        
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-          >
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
-          
-          {currentUser ? (
-            <>
-              <button
-                onClick={() => setCurrentPage('add-quote')}
-                className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-              >
-                <Plus size={20} />
-              </button>
-              <button
-                onClick={() => viewProfile(currentUser.pseudo)}
-                className={`px-4 py-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-              >
-                <User size={20} className="inline mr-2" />
-                {currentUser.pseudo}
-              </button>
-              <button
-                onClick={handleLogout}
-                className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-              >
-                <LogOut size={20} />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setCurrentPage('auth')}
-              className={`px-4 py-2 rounded-lg transition-colors ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
-            >
-              Connexion
-            </button>
-          )}
-        </div>
-      </header>
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+        }
 
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-12">
-        {currentPage === 'home' && (
-          <div className="max-w-2xl mx-auto">
-            {currentQuote ? (
-              <div className="space-y-8">
-                <div className={`p-8 rounded-2xl shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                  <p className="text-2xl italic mb-6 leading-relaxed">"{currentQuote.text}"</p>
-                  <div className="flex justify-between items-center">
-                    <button
-                      onClick={() => viewProfile(currentQuote.author)}
-                      className="text-lg text-blue-500 hover:text-blue-400 transition-colors"
-                    >
-                      — {currentQuote.author}
-                    </button>
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Heart size={16} />
-                      <span>{currentQuote.likes}</span>
-                    </div>
-                  </div>
-                </div>
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
 
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={handleLike}
-                    disabled={!currentUser || likedQuotes.has(currentQuote.id)}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                      !currentUser || likedQuotes.has(currentQuote.id)
-                        ? 'bg-gray-600 cursor-not-allowed opacity-50'
-                        : darkMode
-                        ? 'bg-red-600 hover:bg-red-700'
-                        : 'bg-red-500 hover:bg-red-600 text-white'
-                    }`}
-                  >
-                    <Heart size={20} className="inline mr-2" />
-                    {likedQuotes.has(currentQuote.id) ? 'Déjà liké' : 'J\'aime'}
-                  </button>
-                  
-                  <button
-                    onClick={handleNext}
-                    className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                      darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                    }`}
-                  >
-                    <SkipForward size={20} className="inline mr-2" />
-                    Suivante
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className={`p-12 rounded-2xl text-center ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <p className="text-xl mb-4">Aucune citation disponible</p>
-                <p className="text-gray-500">Connectez-vous pour ajouter la première citation !</p>
-              </div>
-            )}
-          </div>
-        )}
+        .btn-danger {
+            background-color: #dc2626;
+            color: white;
+        }
 
-        {currentPage === 'auth' && (
-          <div className="max-w-md mx-auto">
-            <div className={`p-8 rounded-2xl shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-              <h2 className="text-2xl font-bold mb-6">Connexion / Inscription</h2>
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Pseudo"
-                  value={loginForm.pseudo}
-                  onChange={(e) => setLoginForm({...loginForm, pseudo: e.target.value})}
-                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                  className={`w-full px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
-                />
-                <input
-                  type="password"
-                  placeholder="Mot de passe"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                  className={`w-full px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
-                />
-                <div className="flex gap-4">
-                  <button
-                    onClick={handleLogin}
-                    className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium"
-                  >
-                    Connexion
-                  </button>
-                  <button
-                    onClick={handleRegister}
-                    className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
-                      darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                    }`}
-                  >
-                    Inscription
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        .btn-danger:hover {
+            background-color: #b91c1c;
+        }
 
-        {currentPage === 'add-quote' && (
-          <div className="max-w-2xl mx-auto">
-            <div className={`p-8 rounded-2xl shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-              <h2 className="text-2xl font-bold mb-6">Ajouter une citation</h2>
-              <div className="space-y-4">
-                <textarea
-                  value={newQuoteText}
-                  onChange={(e) => setNewQuoteText(e.target.value)}
-                  placeholder="Écrivez votre citation..."
-                  className={`w-full px-4 py-3 rounded-lg h-32 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
-                />
-                <button
-                  onClick={handleAddQuote}
-                  className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium"
-                >
-                  Publier
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        .btn-danger:disabled {
+            background-color: #6b7280;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
 
-        {currentPage === 'profile' && profileUser && (
-          <div className="max-w-3xl mx-auto">
-            <div className={`p-8 rounded-2xl shadow-xl mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-              <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
-                <User size={32} />
-                {profileUser.pseudo}
-              </h2>
-              <p className="text-gray-500">
-                {profileUser.quotes.length} citation{profileUser.quotes.length > 1 ? 's' : ''}
-              </p>
-            </div>
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+        }
 
-            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <TrendingUp size={20} />
-              Citations les plus appréciées
-            </h3>
+        .card {
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .dark .card {
+            background-color: #1f2937;
+        }
+
+        .light .card {
+            background-color: white;
+        }
+
+        .quote-card {
+            max-width: 48rem;
+            margin: 0 auto 2rem;
+        }
+
+        .quote-text {
+            font-size: 1.5rem;
+            font-style: italic;
+            margin-bottom: 1.5rem;
+            line-height: 1.8;
+        }
+
+        .quote-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .author {
+            font-size: 1.125rem;
+            color: #3b82f6;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .author:hover {
+            color: #60a5fa;
+        }
+
+        .likes {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #6b7280;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .dark input, .dark textarea {
+            background-color: #374151;
+            color: white;
+        }
+
+        .light input, .light textarea {
+            background-color: #f3f4f6;
+            color: #111827;
+        }
+
+        textarea {
+            min-height: 8rem;
+            resize: vertical;
+        }
+
+        .auth-container, .quote-form-container {
+            max-width: 32rem;
+            margin: 0 auto;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .profile-title {
+            font-size: 1.875rem;
+            font-weight: bold;
+        }
+
+        .profile-stats {
+            color: #6b7280;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .quote-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .quote-item {
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+        }
+
+        .dark .quote-item {
+            background-color: #1f2937;
+        }
+
+        .light .quote-item {
+            background-color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1.5rem;
+        }
+
+        .empty-state h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state p {
+            color: #6b7280;
+        }
+
+        .icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-size: 1.5rem;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 640px) {
+            .quote-text {
+                font-size: 1.25rem;
+            }
             
-            <div className="space-y-4">
-              {profileUser.quotes.length > 0 ? (
-                profileUser.quotes.map((quote) => (
-                  <div key={quote.id} className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                    <p className="text-lg italic mb-3">"{quote.text}"</p>
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Heart size={16} />
-                      <span>{quote.likes} j'aime</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center text-gray-500 py-8">Aucune citation pour le moment</p>
-              )}
+            button {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.875rem;
+            }
+        }
+    </style>
+</head>
+<body class="dark">
+    <div id="loading" class="loading">Chargement...</div>
+    
+    <div id="app" class="hidden">
+        <header>
+            <h1 onclick="showPage('home')">QuoteShare</h1>
+            
+            <div class="header-buttons">
+                <button onclick="toggleDarkMode()" id="themeBtn">☀️</button>
+                
+                <div id="userButtons" class="hidden">
+                    <button onclick="showPage('add-quote')">➕</button>
+                    <button onclick="viewProfile(currentUser.pseudo)">
+                        👤 <span id="userName"></span>
+                    </button>
+                    <button onclick="logout()">🚪</button>
+                </div>
+                
+                <button id="loginBtn" class="btn-primary hidden" onclick="showPage('auth')">
+                    Connexion
+                </button>
             </div>
-          </div>
-        )}
-      </main>
+        </header>
+
+        <main>
+            <!-- Page d'accueil -->
+            <div id="homePage">
+                <div id="quoteDisplay" class="hidden">
+                    <div class="card quote-card">
+                        <p class="quote-text" id="currentQuoteText"></p>
+                        <div class="quote-footer">
+                            <span class="author" id="currentAuthor" onclick="viewProfile(this.dataset.author)"></span>
+                            <div class="likes">
+                                <span>❤️</span>
+                                <span id="currentLikes"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn-danger" id="likeBtn" onclick="likeQuote()">
+                            ❤️ J'aime
+                        </button>
+                        <button onclick="nextQuote()">
+                            ⏭️ Suivante
+                        </button>
+                    </div>
+                </div>
+
+                <div id="emptyQuotes" class="card empty-state hidden">
+                    <h3>Aucune citation disponible</h3>
+                    <p>Connectez-vous pour ajouter la première citation !</p>
+                </div>
+            </div>
+
+            <!-- Page d'authentification -->
+            <div id="authPage" class="hidden">
+                <div class="card auth-container">
+                    <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1.5rem;">
+                        Connexion / Inscription
+                    </h2>
+                    <div class="form-group">
+                        <input type="text" id="authPseudo" placeholder="Pseudo">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="authPassword" placeholder="Mot de passe">
+                    </div>
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="login()">Connexion</button>
+                        <button onclick="register()">Inscription</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page d'ajout de citation -->
+            <div id="addQuotePage" class="hidden">
+                <div class="card quote-form-container">
+                    <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1.5rem;">
+                        Ajouter une citation
+                    </h2>
+                    <div class="form-group">
+                        <textarea id="newQuoteText" placeholder="Écrivez votre citation..."></textarea>
+                    </div>
+                    <button class="btn-primary" style="width: 100%;" onclick="addQuote()">
+                        Publier
+                    </button>
+                </div>
+            </div>
+
+            <!-- Page de profil -->
+            <div id="profilePage" class="hidden">
+                <div class="card">
+                    <div class="profile-header">
+                        <span style="font-size: 2rem;">👤</span>
+                        <div>
+                            <h2 class="profile-title" id="profileName"></h2>
+                            <p class="profile-stats" id="profileStats"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 class="section-title">
+                    📈 Citations les plus appréciées
+                </h3>
+
+                <div class="quote-list" id="profileQuotes"></div>
+                
+                <div id="noQuotes" class="empty-state hidden">
+                    <p>Aucune citation pour le moment</p>
+                </div>
+            </div>
+        </main>
     </div>
-  );
-}
+
+    <script>
+        let currentUser = null;
+        let quotes = [];
+        let currentQuote = null;
+        let likedQuotes = new Set();
+        let isDark = true;
+
+        async function init() {
+            try {
+                const quotesData = await window.storage.get('quotes', true);
+                const currentUserData = await window.storage.get('current-user', false);
+                
+                if (quotesData) {
+                    quotes = JSON.parse(quotesData.value);
+                    if (quotes.length > 0) {
+                        currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
+                    }
+                }
+                
+                if (currentUserData) {
+                    currentUser = JSON.parse(currentUserData.value);
+                    const likedData = await window.storage.get(`liked-${currentUser.pseudo}`, false);
+                    if (likedData) {
+                        likedQuotes = new Set(JSON.parse(likedData.value));
+                    }
+                }
+            } catch (error) {
+                console.log('Première visite');
+            }
+            
+            updateUI();
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+        }
+
+        function updateUI() {
+            if (currentUser) {
+                document.getElementById('userButtons').classList.remove('hidden');
+                document.getElementById('loginBtn').classList.add('hidden');
+                document.getElementById('userName').textContent = currentUser.pseudo;
+            } else {
+                document.getElementById('userButtons').classList.add('hidden');
+                document.getElementById('loginBtn').classList.remove('hidden');
+            }
+            
+            if (currentQuote) {
+                document.getElementById('quoteDisplay').classList.remove('hidden');
+                document.getElementById('emptyQuotes').classList.add('hidden');
+                document.getElementById('currentQuoteText').textContent = `"${currentQuote.text}"`;
+                document.getElementById('currentAuthor').textContent = `— ${currentQuote.author}`;
+                document.getElementById('currentAuthor').dataset.author = currentQuote.author;
+                document.getElementById('currentLikes').textContent = currentQuote.likes;
+                
+                const likeBtn = document.getElementById('likeBtn');
+                if (!currentUser || likedQuotes.has(currentQuote.id)) {
+                    likeBtn.disabled = true;
+                    likeBtn.textContent = '❤️ Déjà liké';
+                } else {
+                    likeBtn.disabled = false;
+                    likeBtn.textContent = "❤️ J'aime";
+                }
+            } else {
+                document.getElementById('quoteDisplay').classList.add('hidden');
+                document.getElementById('emptyQuotes').classList.remove('hidden');
+            }
+        }
+
+        function showPage(page) {
+            document.getElementById('homePage').classList.add('hidden');
+            document.getElementById('authPage').classList.add('hidden');
+            document.getElementById('addQuotePage').classList.add('hidden');
+            document.getElementById('profilePage').classList.add('hidden');
+            
+            document.getElementById(page + 'Page').classList.remove('hidden');
+        }
+
+        function toggleDarkMode() {
+            isDark = !isDark;
+            document.body.className = isDark ? 'dark' : 'light';
+            document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
+        }
+
+        async function login() {
+            const pseudo = document.getElementById('authPseudo').value;
+            const password = document.getElementById('authPassword').value;
+            
+            if (!pseudo || !password) {
+                alert('Veuillez remplir tous les champs');
+                return;
+            }
+            
+            try {
+                const usersData = await window.storage.get('users', true);
+                const users = usersData ? JSON.parse(usersData.value) : [];
+                const user = users.find(u => u.pseudo === pseudo && u.password === password);
+                
+                if (user) {
+                    currentUser = user;
+                    await window.storage.set('current-user', JSON.stringify(user), false);
+                    
+                    try {
+                        const likedData = await window.storage.get(`liked-${user.pseudo}`, false);
+                        likedQuotes = new Set(JSON.parse(likedData.value));
+                    } catch {
+                        likedQuotes = new Set();
+                    }
+                    
+                    document.getElementById('authPseudo').value = '';
+                    document.getElementById('authPassword').value = '';
+                    showPage('home');
+                    updateUI();
+                } else {
+                    alert('Identifiants incorrects');
+                }
+            } catch {
+                alert('Identifiants incorrects');
+            }
+        }
+
+        async function register() {
+            const pseudo = document.getElementById('authPseudo').value;
+            const password = document.getElementById('authPassword').value;
+            
+            if (!pseudo || !password) {
+                alert('Veuillez remplir tous les champs');
+                return;
+            }
+            
+            try {
+                const usersData = await window.storage.get('users', true);
+                const users = usersData ? JSON.parse(usersData.value) : [];
+                
+                if (users.find(u => u.pseudo === pseudo)) {
+                    alert('Ce pseudo existe déjà');
+                    return;
+                }
+                
+                const newUser = { pseudo, password };
+                users.push(newUser);
+                await window.storage.set('users', JSON.stringify(users), true);
+                
+                currentUser = newUser;
+                await window.storage.set('current-user', JSON.stringify(newUser), false);
+                
+                document.getElementById('authPseudo').value = '';
+                document.getElementById('authPassword').value = '';
+                showPage('home');
+                updateUI();
+            } catch (error) {
+                alert('Erreur lors de l\'inscription');
+            }
+        }
+
+        async function logout() {
+            currentUser = null;
+            likedQuotes = new Set();
+            await window.storage.delete('current-user', false);
+            showPage('home');
+            updateUI();
+        }
+
+        async function addQuote() {
+            const text = document.getElementById('newQuoteText').value.trim();
+            
+            if (!currentUser || !text) {
+                alert('Veuillez écrire une citation');
+                return;
+            }
+            
+            const newQuote = {
+                id: Date.now(),
+                text,
+                author: currentUser.pseudo,
+                likes: 0
+            };
+            
+            quotes.push(newQuote);
+            await window.storage.set('quotes', JSON.stringify(quotes), true);
+            
+            if (!currentQuote) {
+                currentQuote = newQuote;
+            }
+            
+            document.getElementById('newQuoteText').value = '';
+            showPage('home');
+            updateUI();
+        }
+
+        async function likeQuote() {
+            if (!currentUser || !currentQuote || likedQuotes.has(currentQuote.id)) return;
+            
+            quotes = quotes.map(q => 
+                q.id === currentQuote.id ? { ...q, likes: q.likes + 1 } : q
+            );
+            await window.storage.set('quotes', JSON.stringify(quotes), true);
+            
+            likedQuotes.add(currentQuote.id);
+            await window.storage.set(`liked-${currentUser.pseudo}`, JSON.stringify([...likedQuotes]), false);
+            
+            currentQuote = quotes.find(q => q.id === currentQuote.id);
+            updateUI();
+        }
+
+        function nextQuote() {
+            if (quotes.length > 0) {
+                currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
+                updateUI();
+            }
+        }
+
+        function viewProfile(pseudo) {
+            const userQuotes = quotes.filter(q => q.author === pseudo).sort((a, b) => b.likes - a.likes);
+            
+            document.getElementById('profileName').textContent = pseudo;
+            document.getElementById('profileStats').textContent = 
+                `${userQuotes.length} citation${userQuotes.length > 1 ? 's' : ''}`;
+            
+            const container = document.getElementById('profileQuotes');
+            container.innerHTML = '';
+            
+            if (userQuotes.length > 0) {
+                document.getElementById('noQuotes').classList.add('hidden');
+                userQuotes.forEach(quote => {
+                    const div = document.createElement('div');
+                    div.className = 'quote-item';
+                    div.innerHTML = `
+                        <p style="font-size: 1.125rem; font-style: italic; margin-bottom: 0.75rem;">"${quote.text}"</p>
+                        <div class="likes">
+                            <span>❤️</span>
+                            <span>${quote.likes} j'aime</span>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } else {
+                document.getElementById('noQuotes').classList.remove('hidden');
+            }
+            
+            showPage('profile');
+        }
+
+        init();
+    </script>
+</body>
+</html>
