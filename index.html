@@ -408,6 +408,35 @@
     </div>
 
     <script>
+        // Fonction pour détecter si window.storage est disponible
+        const hasSharedStorage = typeof window.storage !== 'undefined';
+
+        // Fonctions utilitaires pour le stockage
+        async function getStorageItem(key, shared = false) {
+            if (hasSharedStorage && shared) {
+                try {
+                    const result = await window.storage.get(key, true);
+                    return result ? result.value : null;
+                } catch (error) {
+                    console.log('Erreur storage:', error);
+                    return localStorage.getItem(key);
+                }
+            }
+            return localStorage.getItem(key);
+        }
+
+        async function setStorageItem(key, value, shared = false) {
+            if (hasSharedStorage && shared) {
+                try {
+                    await window.storage.set(key, value, true);
+                    return;
+                } catch (error) {
+                    console.log('Erreur storage:', error);
+                }
+            }
+            localStorage.setItem(key, value);
+        }
+
         let currentUser = null;
         let quotes = [];
         let currentQuote = null;
@@ -416,11 +445,11 @@
 
         async function init() {
             try {
-                // Charger les citations (PARTAGÉES entre tous)
-                const quotesData = await window.storage.get('quotes', true);
+                // Charger les citations (PARTAGÉES si possible)
+                const quotesData = await getStorageItem('quotes', true);
                 
                 if (quotesData) {
-                    quotes = JSON.parse(quotesData.value);
+                    quotes = JSON.parse(quotesData);
                     if (quotes.length > 0) {
                         currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
                     }
@@ -522,8 +551,8 @@
             }
             
             try {
-                const usersData = await window.storage.get('users', true);
-                const users = usersData ? JSON.parse(usersData.value) : [];
+                const usersData = await getStorageItem('users', true);
+                const users = usersData ? JSON.parse(usersData) : [];
                 const user = users.find(u => u.pseudo === pseudo && u.password === password);
                 
                 if (user) {
@@ -560,8 +589,8 @@
             }
             
             try {
-                const usersData = await window.storage.get('users', true);
-                const users = usersData ? JSON.parse(usersData.value) : [];
+                const usersData = await getStorageItem('users', true);
+                const users = usersData ? JSON.parse(usersData) : [];
                 
                 if (users.find(u => u.pseudo === pseudo)) {
                     alert('Ce pseudo existe déjà');
@@ -570,7 +599,7 @@
                 
                 const newUser = { pseudo, password };
                 users.push(newUser);
-                await window.storage.set('users', JSON.stringify(users), true);
+                await setStorageItem('users', JSON.stringify(users), true);
                 
                 currentUser = newUser;
                 localStorage.setItem('current-user', JSON.stringify(newUser));
@@ -617,7 +646,7 @@
             };
             
             quotes.push(newQuote);
-            await window.storage.set('quotes', JSON.stringify(quotes), true);
+            await setStorageItem('quotes', JSON.stringify(quotes), true);
             
             if (!currentQuote) {
                 currentQuote = newQuote;
@@ -635,7 +664,7 @@
             quotes = quotes.map(q => 
                 q.id === currentQuote.id ? { ...q, likes: q.likes + 1 } : q
             );
-            await window.storage.set('quotes', JSON.stringify(quotes), true);
+            await setStorageItem('quotes', JSON.stringify(quotes), true);
             
             likedQuotes.add(currentQuote.id);
             localStorage.setItem(`liked-${currentUser.pseudo}`, JSON.stringify([...likedQuotes]));
