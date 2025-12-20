@@ -490,15 +490,23 @@
         }
 
         function showPage(page) {
+            console.log('Affichage de la page:', page);
             document.getElementById('homePage').classList.add('hidden');
             document.getElementById('authPage').classList.add('hidden');
             document.getElementById('addQuotePage').classList.add('hidden');
             document.getElementById('profilePage').classList.add('hidden');
             
-            document.getElementById(page + 'Page').classList.remove('hidden');
+            const pageElement = document.getElementById(page + 'Page');
+            console.log('Element trouvé:', pageElement);
+            if (pageElement) {
+                pageElement.classList.remove('hidden');
+            } else {
+                console.error('Page non trouvée:', page + 'Page');
+            }
         }
 
         function goToAddQuote() {
+            console.log('goToAddQuote appelé, currentUser:', currentUser);
             if (!currentUser) {
                 alert('Vous devez être connecté pour ajouter une citation');
                 showPage('auth');
