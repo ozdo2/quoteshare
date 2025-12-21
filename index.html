@@ -313,6 +313,7 @@
                 
                 <div id="userButtons" class="hidden">
                     <button onclick="goToAddQuote()" title="Ajouter une citation">➕</button>
+                    <button onclick="showPage('favorites')" title="Mes favoris">⭐</button>
                     <button onclick="viewProfile(currentUser.pseudo)">
                         👤 <span id="userName"></span>
                     </button>
@@ -350,6 +351,9 @@
                     <div class="button-group">
                         <button class="btn-danger" id="likeBtn" onclick="likeQuote()">
                             ❤️ J'aime
+                        </button>
+                        <button id="favoriteBtn" onclick="toggleFavorite()" style="background-color: #f59e0b;" class="text-white">
+                            ⭐ Favori
                         </button>
                         <button onclick="nextQuote()">
                             ⏭️ Suivante
@@ -420,6 +424,23 @@
                 
                 <div id="noQuotes" class="empty-state hidden">
                     <p>Aucune citation pour le moment</p>
+                </div>
+            </div>
+
+            <!-- Page des favoris -->
+            <div id="favoritesPage" class="hidden">
+                <div class="card">
+                    <h2 style="font-size: 1.875rem; font-weight: bold; margin-bottom: 0.5rem;">
+                        ⭐ Mes citations favorites
+                    </h2>
+                    <p class="profile-stats" id="favoritesCount"></p>
+                </div>
+
+                <div class="quote-list" id="favoritesList"></div>
+                
+                <div id="noFavorites" class="empty-state hidden">
+                    <p>Aucune citation favorite pour le moment</p>
+                    <p style="margin-top: 0.5rem; font-size: 0.875rem;">Cliquez sur ⭐ pour ajouter des citations à vos favoris</p>
                 </div>
             </div>
         </main>
@@ -498,6 +519,7 @@
         let quotes = [];
         let currentQuote = null;
         let likedQuotes = new Set();
+        let favoriteQuotes = new Set();
         let isDark = true;
         window.appReady = false;
 
@@ -539,6 +561,10 @@
                     const likedData = localStorage.getItem(`liked-${currentUser.pseudo}`);
                     if (likedData) {
                         likedQuotes = new Set(JSON.parse(likedData));
+                    }
+                    const favoritesData = localStorage.getItem(`favorites-${currentUser.pseudo}`);
+                    if (favoritesData) {
+                        favoriteQuotes = new Set(JSON.parse(favoritesData));
                     }
                 }
                 
@@ -587,6 +613,19 @@
                     likeBtn.disabled = false;
                     likeBtn.textContent = "❤️ J'aime";
                 }
+                
+                const favoriteBtn = document.getElementById('favoriteBtn');
+                if (!currentUser) {
+                    favoriteBtn.disabled = true;
+                    favoriteBtn.textContent = '⭐ Favori';
+                } else if (favoriteQuotes.has(currentQuote.id)) {
+                    favoriteBtn.textContent = '⭐ Retiré des favoris';
+                    favoriteBtn.style.backgroundColor = '#6b7280';
+                } else {
+                    favoriteBtn.textContent = '⭐ Ajouter aux favoris';
+                    favoriteBtn.style.backgroundColor = '#f59e0b';
+                    favoriteBtn.disabled = false;
+                }
             } else {
                 document.getElementById('quoteDisplay').classList.add('hidden');
                 document.getElementById('emptyQuotes').classList.remove('hidden');
@@ -598,10 +637,16 @@
             document.getElementById('authPage').classList.add('hidden');
             document.getElementById('add-quotePage').classList.add('hidden');
             document.getElementById('profilePage').classList.add('hidden');
+            document.getElementById('favoritesPage').classList.add('hidden');
             
             const pageElement = document.getElementById(page + 'Page');
             if (pageElement) {
                 pageElement.classList.remove('hidden');
+                
+                // Charger les favoris si on ouvre cette page
+                if (page === 'favorites') {
+                    displayFavorites();
+                }
             }
         }
 
@@ -639,6 +684,9 @@
                     
                     const likedData = localStorage.getItem(`liked-${user.pseudo}`);
                     likedQuotes = likedData ? new Set(JSON.parse(likedData)) : new Set();
+                    
+                    const favoritesData = localStorage.getItem(`favorites-${user.pseudo}`);
+                    favoriteQuotes = favoritesData ? new Set(JSON.parse(favoritesData)) : new Set();
                     
                     document.getElementById('authPseudo').value = '';
                     document.getElementById('authPassword').value = '';
@@ -689,6 +737,7 @@
         function logout() {
             currentUser = null;
             likedQuotes = new Set();
+            favoriteQuotes = new Set();
             localStorage.removeItem('current-user');
             showPage('home');
             updateUI();
@@ -757,6 +806,62 @@
             if (quotes.length > 0) {
                 currentQuote = quotes[Math.floor(Math.random() * quotes.length)];
                 updateUI();
+            }
+        }
+
+        function toggleFavorite() {
+            if (!currentUser || !currentQuote) return;
+            
+            if (favoriteQuotes.has(currentQuote.id)) {
+                favoriteQuotes.delete(currentQuote.id);
+            } else {
+                favoriteQuotes.add(currentQuote.id);
+            }
+            
+            localStorage.setItem(`favorites-${currentUser.pseudo}`, JSON.stringify([...favoriteQuotes]));
+            updateUI();
+        }
+
+        function displayFavorites() {
+            if (!currentUser) {
+                showPage('auth');
+                return;
+            }
+            
+            const favoritesList = quotes.filter(q => favoriteQuotes.has(q.id));
+            
+            document.getElementById('favoritesCount').textContent = 
+                `${favoritesList.length} citation${favoritesList.length > 1 ? 's' : ''} favorite${favoritesList.length > 1 ? 's' : ''}`;
+            
+            const container = document.getElementById('favoritesList');
+            container.innerHTML = '';
+            
+            if (favoritesList.length > 0) {
+                document.getElementById('noFavorites').classList.add('hidden');
+                favoritesList.forEach(quote => {
+                    const div = document.createElement('div');
+                    div.className = 'quote-item';
+                    
+                    let authorInfo = '';
+                    if (quote.originalAuthor) {
+                        authorInfo = `<div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.5rem;">Citation de ${quote.originalAuthor}</div>`;
+                    }
+                    
+                    div.innerHTML = `
+                        <p style="font-size: 1.125rem; font-style: italic; margin-bottom: 0.75rem;">"${quote.text}"</p>
+                        <div style="color: #3b82f6; cursor: pointer; margin-bottom: 0.5rem;" onclick="viewProfile('${quote.author}')">
+                            — ${quote.author}
+                        </div>
+                        ${authorInfo}
+                        <div class="likes" style="margin-top: 0.75rem;">
+                            <span>❤️</span>
+                            <span>${quote.likes} j'aime</span>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } else {
+                document.getElementById('noFavorites').classList.remove('hidden');
             }
         }
 
